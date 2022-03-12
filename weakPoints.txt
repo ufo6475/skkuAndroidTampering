@@ -11,4 +11,10 @@ main_img05 = mainSpare : 수강 취소
 
 ?BasketActivityTab3Modify 에 i=100 일때 시행하는 것 존재
 
-FileManagerActivity$1 에서 기기의 루팅 여부 확인
+FileManagerActivity$1 에서 기기의 루팅 및 외부 기기 여부 확인 -> 회피 성공(test-2) 
+-> 리패키징 탐지에 걸림
+-> 리패키징 탐지 코드 Snackbar.class 에서 확인
+
+ui\asm\util\element 에서 message 받는 것으로 추측
+
+*Signing 구문: java -jar signapk.jar testkey.x509.pem testkey.pk8 [서명할 APK 이름] [서명 후의 APK 명]
