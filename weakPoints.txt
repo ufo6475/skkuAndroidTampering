@@ -1,0 +1,14 @@
+*취약점 분석
+
+SugangActivityTab2Web.class 내에 일정횟수 이상 SugangMacro 호출
+ -> SugangActivityTab2Web$a.smali 파일 내 74번째 줄에서 118(0x76) 번 이상 호출시 매크로 사용 확인
++SugangActivityTab3DetailWeb.class
+main_img01 = mainNotice : 공지사항
+main_img02 = mainSearch : 조회
+main_img03 = mainBasket : 책가방
+main_img04 = mainSugang : 수강신청
+main_img05 = mainSpare : 수강 취소
+
+?BasketActivityTab3Modify 에 i=100 일때 시행하는 것 존재
+
+FileManagerActivity$1 에서 기기의 루팅 여부 확인
