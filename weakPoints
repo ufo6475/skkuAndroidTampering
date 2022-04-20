@@ -2,7 +2,128 @@
 
 *취약점 분석
 
-<2022/03/13 updates>
+
+<역공학 방법>
+1. apk 파일을 apk download 웹사이트를 통해 얻음(https://apps.evozi.com/apk-downloader/)
+2. apk 파일을 jar 파일로 변환 (dex2jar 프로그램을 사용하거나 http://apk-deguard.com/ 사용)
+3. jadx 프로그램이나 dex-tool 프로그램을 사용하여 jar 파일 오픈
+4. java 파일 내의 취약점 분석
+5. java 파일에 해당하는 smali 파일을 탐색
+6. 해당 파일 내의 취약점 코드 탐색 및 변조
+7. apktool을 이용하여 다시 apk 파일로 리패키징
+8. signapk.jar 를 사용하여 apk 파일에 임의의 서명 추가
+9. 스마트폰에 설치 및 시험
+
+
+<앱의 무결성 검증 방식>
+1. 스마트폰 루팅 여부 확인
+2. 위조앱의 서명값을 서버에서 정상앱의 서명값과 대조
+
+
+<루팅 여부 확인 회피 방법>
+1. 앱을 안드로이드 스튜디오 emulator 에서 실행시켜본 결과 루팅된 기기라 실행 되지 않는다는 문구 확인
+2. 해당 문구가 messages.xml 파일 상에 존재 하는 것 확인
+3. 이 메세지의 id 값으로 전체 java 파일 search
+4. FileManagerActivity$1.java 파일에서 해당 메세지를 호출 하는 것 확인
+5. common/h$1.smali 파일이 java 파일과 동일하다는 것 확인
+6. java 파일에서 
+  if(루팅){
+    msg 출력
+    ...
+    finish()
+    }
+  else{ // 정상 기기라면
+    startActivity()
+  }
+  로 이루어져있는 것을 파악하고 해당 내용이 smali 코드 상에
+  
+    invoke-virtual {v0}, Landroid/widget/Toast;->show()V
+
+    iget-object v0, p0, Lkr/co/swit/common/h$1;->a:Lkr/co/swit/common/h;
+
+    invoke-virtual {v0}, Lkr/co/swit/common/h;->finish()V
+    
+  로 변환되어 있는 것 확인
+  여기서 finish() 구문을 삭제하고 정상 기기 일때 작동하는 코드를 복사해와 
+  
+    iget-object v1, p0, Lkr/co/swit/common/h$1;->a:Lkr/co/swit/common/h;
+
+    const-class v2, Lkr/co/swit/common/activity/main/LoginActivity;
+
+    invoke-direct {v0, v1, v2}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
+
+    iget-object v1, p0, Lkr/co/swit/common/h$1;->a:Lkr/co/swit/common/h;
+
+    invoke-virtual {v1, v0}, Lkr/co/swit/common/h;->startActivity(Landroid/content/Intent;)V
+
+로 정상 작동되게 변경
+7. 재설치하여 시험해본 결과 루팅된 기기라는 메세지는 출력되지만 앱 정상 작동
+
+
+<서버측에서 서명 값 무결성 검증 방식 회피 방법>
+1. 루팅 여부 회피 후 로그인 시도시 리패키징 감지로 앱이 종료되었다는 문구 출력
+2. 해당 메세지는 messages.xml 파일에 존재하지 않았음
+3. 전반적으로 LoginActivity 부터 추적한 결과 Snackbar.java 파일에서 서버로 서명값을 보내어 무결성 검증을 실시하는 코드 발견
+4. 앱에서 서명값을 얻은 후 서버로 보내기 직전에 서명값을 가진 변수에 정상 서명값을 덮어씀으로써 무결성 검증을 회피할 수 있다는 것을 알아냄
+(https://wooyun.js.org/drops/APK%E7%AD%BE%E5%90%8D%E6%A0%A1%E9%AA%8C%E7%BB%95%E8%BF%87.html 참조)
+5. 정상 서명값을 알아내기 위해 getSignature.jar 툴을 이용(http://linforum.kr/bbs/board.php?bo_table=android&wr_id=450 참조)
+6. Snackbar.java 파일에 해당하는 lib/g/g.smali 파일 발견
+7. java 파일에서 
+
+  PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), 64);
+        return (packageInfo == null || packageInfo.signatures.length <= 0) ? null : init(packageInfo.signatures[0].toByteArray());
+        
+ 라는 구문을 통해 해당 앱의 서명값을 얻어내는 것을 파악하고
+ 이에 대응되는 smali 코드는 
+
+    iget-object v0, v1, Landroid/content/pm/PackageInfo;->signatures:[Landroid/content/pm/Signature;
+
+    const/4 v1, 0x0
+
+    aget-object v0, v0, v1
+
+    invoke-virtual {v0}, Landroid/content/pm/Signature;->toByteArray()[B
+
+    move-result-object v0
+    
+ 임을 확인
+ 
+ 여기서 v0에 정상 서명값을 ByteArray() 값으로 덮어쓰면 되므로 해당 코드를 
+ 
+    iget-object v0, v1, Landroid/content/pm/PackageInfo;->signatures:[Landroid/content/pm/Signature;
+
+    const/4 v1, 0x0
+
+    aget-object v0, v0, v1
+
+    invoke-virtual {v0}, Landroid/content/pm/Signature;->toByteArray()[B
+
+    move-result-object v0
+
+    const-string v1, "3082~"
+
+    .local v1, "a":Ljava/lang/String;
+    new-instance v2, Ljava/math/BigInteger;
+
+    const/16 v3, 0x10
+
+    invoke-direct {v2, v1, v3}, Ljava/math/BigInteger;-><init>(Ljava/lang/String;I)V
+
+    invoke-virtual {v2}, Ljava/math/BigInteger;->toByteArray()[B
+
+    move-result-object v0
+
+로 변경. 추가된 코드는 java 파일에서 서명값을 ByteArray 로 변경하는 코드로 작성하고 apk 파일로 만든 후 다시 디컴파일하여 smali 코드를 만들어냄
+(여기서 3082~ 부분에 정상앱의 서명값이 모두 들어감, 뒷자리는 ~ 처리)
+8. 변경된 파일들을 리패키징과 리사이닝을 하여 재설치하여 실행해본 결과 무결성 검증 회피에 성공하여 정상적으로 로그인 성공
+
+
+
+
+
+
+<기록>
+<2022/03/13>
 1. 주요 activity file 명 모두 난독화 되지 않고 그대로 보존
 2. 알림 메시지등에 사용되는 string들 모두 messages.xml, config.xml에 그대로 보존
 3. 이를 토대로 어떤 class인지 추측 가능
@@ -19,7 +140,7 @@
 14. 리패키징과 사이닝을 통해 다시 로그인 해본 결과 리패키징 감지 회피에 성공( test-3)
 
 
-<2022/04/19 updates>
+<2022/04/19>
 1. 기존의 특정 int 값에서 macro 방지 코드 실시 하는 것이 특정 횟수가 아닌 message 번호(118)를 뜻하는 것이었음.
 2. log로 받은 값이 해당 값인 경우 매크로 방지 코드가 작동함.
 3. 이러한 번호를 조작하여 해당 매크로 방지 코드가 작동하지 않게 변경
